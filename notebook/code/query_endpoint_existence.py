@@ -6,7 +6,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 sm_client = boto3.client('sagemaker')
 
-#Retrieve transform job name from event and return transform job status.
+#Retrieve endpoint existence and status info.
 def lambda_handler(event, context):
 
     if ('EndpointName' in event):
@@ -16,7 +16,7 @@ def lambda_handler(event, context):
         raise KeyError('EndpointName key not found in function input!'+
                       ' The input received was: {}.'.format(json.dumps(event)))
 
-    #Query boto3 API to check training status.
+    #Query boto3 API to check Endpoint.
     endpoint_existed = False
     endpoint_status = None
     try:
