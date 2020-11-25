@@ -1,10 +1,7 @@
-from pipeline.ml_pipeline_dependencies import *
-
-processing_output_data = f"s3://{bucket_name}/preprocessing/output"
-PREPROCESSING_SCRIPT_LOCATION = "./pipeline/preprocessing.py"
-suffix = None
+from ml_pipeline_dependencies import *
 
 def upload_preprocess_code(bucket_name):
+    PREPROCESSING_SCRIPT_LOCATION = "./pipeline/preprocessing.py"
     input_code_uri = sagemaker_session.upload_data(
         PREPROCESSING_SCRIPT_LOCATION,
         bucket = bucket_name,
@@ -26,8 +23,7 @@ def create_trial(experiment_name, trial_name):
         experiment_name = experiment_name,
         sagemaker_boto_client = sm,
     )
-    return trial
-        
+    return trial        
 
 def create_preprocessing_step(
     processing_job_placeholder,
@@ -59,7 +55,7 @@ def create_preprocessing_step(
         )
     ]
 
-    
+    processing_output_data = f"s3://{bucket_name}/preprocessing/output"
     outputs = [
         ProcessingOutput(
             output_name = "train_data",
@@ -250,16 +246,16 @@ def create_model_step(
 
 def create_existing_model_step(
     model_name_placeholder, 
+    existing_model_name,
     image_uri, 
     existing_model_uri,
-    role
+    sagemaker_execution_role
 ):
     # for deploying existing model
-    existing_model_name = f"dm-model-{suffix}"
     existing_model = Model(
         model_data = existing_model_uri,
         image_uri = image_uri,
-        role = role,
+        role = sagemaker_execution_role,
         name = existing_model_name
     )
     existing_model_step = ModelStep(
@@ -407,7 +403,6 @@ def is_workflow_existed(workflow_role_arn):
     except: 
         return False
 
-
 def create_workflow(
     bucket_name, 
     data_file,
@@ -458,7 +453,7 @@ def create_workflow(
     training_trial = create_trial(experiment_name, f"xgb-training-job-{suffix}")
     training_step = create_training_step(execution_input["TrainingJobName"], image_uri, bucket_name, experiment_name, training_trial.trial_name, sagemaker_execution_role)
     model_step = create_model_step(execution_input["ModelName"], training_step)
-    existing_model_step = create_existing_model_step(execution_input["ModelName"], image_uri, existing_model_uri, sagemaker_execution_role)
+    existing_model_step = create_existing_model_step(execution_input["ModelName"], f"dm-model-{suffix}", image_uri, existing_model_uri, sagemaker_execution_role)
     query_endpoint_lambda_step = create_lambda_query_endpoint_step(execution_input['LambdaFunctionNameOfQueryEndpoint'])
     endpoint_config_step = create_endpoint_configurgation_step(
         execution_input["EndpointConfigName"], 
@@ -522,8 +517,8 @@ def create_workflow(
     endpoint_update_step.add_catch(catch_state_processing)
     existing_model_step.add_catch(catch_state_processing)
     
-#     workflow_graph = Chain([processing_step, to_do_hpo_choice_step])
-    workflow_graph = Chain([to_do_hpo_choice_step])
+    workflow_graph = Chain([processing_step, to_do_hpo_choice_step])
+#     workflow_graph = Chain([to_do_hpo_choice_step])
 
     # Create Workflow
     workflow_arn = get_state_machine_arn(workflow_name, region, account_id)
@@ -550,6 +545,7 @@ def main(
     bucket_name, 
     data_file,
     topic_name,
+    existing_model_uri,
     workflow_name,
     region, 
     account_id,
@@ -565,16 +561,15 @@ def main(
         data_file,
         topic_name,
         experiment.experiment_name,
+        existing_model_uri,
         workflow_name, 
         region, 
         account_id,
         workflow_execution_role,
         sagemaker_execution_role
     )
-
+    
     # execute workflow
-    suffix = datetime.now().strftime("%y%m%d-%H%M")
-
     # execution input parameter values
     preprocessing_job_name = f"dm-preprocessing-{suffix}"
     tuning_job_name = f"dm-tuning-{suffix}"
@@ -588,8 +583,8 @@ def main(
     execution = workflow.execute(
         inputs = {
             "PreprocessingJobName": preprocessing_job_name,
-            "ToDoHPO": require_hpo,
-            "ToDoTraining": require_model_training,
+            "ToDoHPO": str(require_hpo).lower() in ['true', '1', 'yes', 't'],
+            "ToDoTraining": str(require_model_training).lower() in ['true', '1', 'yes', 't'],
             "TrainingJobName": training_job_name,
             "TuningJobName": tuning_job_name,
             "ModelName": model_job_name,
@@ -608,11 +603,12 @@ if __name__ == "__main__":
     parser.add_argument("--topic-name", required = True)
     parser.add_argument("--require-hpo", required = True)
     parser.add_argument("--require-model-training", required = True)
+    parser.add_argument("--existing-model-uri")
 
     args = vars(parser.parse_args())
     args['bucket_name'] = bucket_name
     args['region'] = region
-    args['account_id'] = account_id
     args['sagemaker_execution_role'] = sagemaker_execution_role
+    args['account_id'] = account_id
     print("args: {}".format(args))
     main(**args)
