@@ -32,7 +32,7 @@ sm = session.client('sagemaker')
 sagemaker_session = sagemaker.Session()
 
 region = boto3.Session().region_name
-role = get_execution_role()
+sagemaker_execution_role = get_execution_role()
 bucket_name = f'xgboost-direct-marketing-{account_id}-{region}'
 prefix = 'sagemaker/DEMO-xgboost-dm/manual_pipeline'
 account_id = session.client('sts').get_caller_identity().get('Account')
