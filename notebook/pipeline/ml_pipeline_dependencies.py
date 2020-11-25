@@ -30,9 +30,8 @@ from smexperiments.search_expression import Filter, Operator, SearchExpression
 session = boto3.Session()
 sm = session.client('sagemaker')
 sagemaker_session = sagemaker.Session()
-
-region = boto3.Session().region_name
 sagemaker_execution_role = get_execution_role()
-bucket_name = f'xgboost-direct-marketing-{account_id}-{region}'
-prefix = 'sagemaker/DEMO-xgboost-dm/manual_pipeline'
+
+region = session.region_name
 account_id = session.client('sts').get_caller_identity().get('Account')
+bucket_name = f'xgboost-direct-marketing-{account_id}-{region}'

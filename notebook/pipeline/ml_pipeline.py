@@ -1,4 +1,4 @@
-from ml_pipeline_dependencies import *
+from pipeline.ml_pipeline_dependencies import *
 
 processing_output_data = f"s3://{bucket_name}/preprocessing/output"
 PREPROCESSING_SCRIPT_LOCATION = "./pipeline/preprocessing.py"
@@ -12,28 +12,40 @@ def upload_preprocess_code(bucket_name):
     )
     return input_code_uri
 
-def create_experiment():
+def create_experiment(experiment_name):
     experiment = Experiment.create(
-        experiment_name = f"xgboost-target-direct-marketing-{suffix}", 
+        experiment_name = experiment_name, 
         description = "Classification of target direct marketing", 
-        sagemaker_boto_client = sm)
+        sagemaker_boto_client = sm
     )
     return experiment
+
+def create_trial(experiment_name, trial_name):
+    trial = Trial.create(
+        trial_name = trial_name, 
+        experiment_name = experiment_name,
+        sagemaker_boto_client = sm,
+    )
+    return trial
+        
 
 def create_preprocessing_step(
     processing_job_placeholder,
     input_code_uri,
     data_file,
-    experiment_name
+    experiment_name,
+    trial_name,
+    sagemaker_execution_role
 ):
     preprocessing_processor = SKLearnProcessor(
         framework_version='0.20.0',
-        role = role,
+        role = sagemaker_execution_role,
         instance_count = 1,
         instance_type = 'ml.m5.xlarge',
         max_runtime_in_seconds = 1200
     )
 
+    processing_input_data = f's3://{bucket_name}/preprocessing/input/{data_file}'
     inputs = [
         ProcessingInput(
             input_name = "code",
@@ -42,11 +54,12 @@ def create_preprocessing_step(
         ),
         ProcessingInput(
             input_name = "input_data",
-            source = input_data,
+            source = processing_input_data,
             destination='/opt/ml/processing/input'
         )
     ]
 
+    
     outputs = [
         ProcessingOutput(
             output_name = "train_data",
@@ -65,13 +78,6 @@ def create_preprocessing_step(
         )
     ]
 
-    trial_name = f"xgb-processing-job-{suffix}"
-    xgb_trial = Trial.create(
-        trial_name = trial_name, 
-        experiment_name = experiment_name,
-        sagemaker_boto_client = sm,
-    )
-    
     processing_step = ProcessingStep(
         "Preprocessing",
         processor = preprocessing_processor,
@@ -81,7 +87,7 @@ def create_preprocessing_step(
         container_arguments = ["--data-file", data_file],
         container_entrypoint = ["python3", "/opt/ml/processing/input/code/preprocessing.py"],
         experiment_config = {
-            "TrialName": xgb_trial.trial_name,
+            "TrialName": trial_name,
             "TrialComponentDisplayName": "Processing",
         }
     )    
@@ -92,6 +98,7 @@ def create_hpo_step(
     tuning_job_name_placeholder, 
     image_uri, 
     bucket_name, 
+    sagemaker_execution_role,
     ml_instance_count = 1,
     ml_instance_type = 'ml.m5.xlarge',
     objective_metric_name = 'validation:auc'
@@ -100,7 +107,7 @@ def create_hpo_step(
 
     tuning_estimator = sagemaker.estimator.Estimator(
         image_uri,
-        role, 
+        sagemaker_execution_role, 
         instance_count = ml_instance_count, 
         instance_type = ml_instance_type,
         output_path = tuning_output_path,
@@ -132,6 +139,7 @@ def create_hpo_step(
         max_parallel_jobs = 3
     )
 
+    processing_output_data = f"s3://{bucket_name}/preprocessing/output"
     s3_input_train = TrainingInput(s3_data = f'{processing_output_data}/train', content_type = 'csv')
     s3_input_validation = TrainingInput(s3_data = f'{processing_output_data}/validation', content_type = 'csv')
     hpo_data = dict(
@@ -150,11 +158,11 @@ def create_hpo_step(
 
     return tuning_step
 
-def create_lambda_query_hpo_job_step():
+def create_lambda_query_hpo_job_step(lambda_function_name_query_hpo_job_placeholder):
     query_hpo_job_lambda_step = LambdaStep(
         'Query HPO Job',
         parameters = {  
-            "FunctionName": execution_input['LambdaFunctionNameOfQueryHpoJob'],
+            "FunctionName": lambda_function_name_query_hpo_job_placeholder,
             'Payload':{
                 "HpoJobName.$": "$$.Execution.Input['TuningJobName']"
             }
@@ -180,6 +188,7 @@ def create_training_step(
     image_uri, 
     bucket_name, 
     experiment_name,
+    trial_name,
     role, 
     ml_instance_count = 1,
     ml_instance_type = 'ml.m5.xlarge',
@@ -206,20 +215,13 @@ def create_training_step(
     )
     training_estimator.set_hyperparameters(**hpo) 
     
-    # use all the features for training.
-    s3_input_train = sagemaker.inputs.TrainingInput(s3_data=f'{output_data}/train', content_type='csv')
-    s3_input_validation = sagemaker.inputs.TrainingInput(s3_data=f'{output_data}/validation', content_type='csv')
+    processing_output_data = f"s3://{bucket_name}/preprocessing/output"
+    s3_input_train = sagemaker.inputs.TrainingInput(s3_data=f'{processing_output_data}/train', content_type='csv')
+    s3_input_validation = sagemaker.inputs.TrainingInput(s3_data=f'{processing_output_data}/validation', content_type='csv')
 
     training_data = dict(
         train = s3_input_train,
         validation = s3_input_validation
-    )
-
-    trial_name = f"xgb-training-job-{suffix}"
-    xgb_trial = Trial.create(
-        trial_name = trial_name, 
-        experiment_name = experiment_name,
-        sagemaker_boto_client = sm,
     )
 
     training_step = TrainingStep(
@@ -229,7 +231,7 @@ def create_training_step(
         job_name = training_job_name_placeholer,
         wait_for_completion = True,
         experiment_config = {
-            "TrialName": xgb_trial.trial_name,
+            "TrialName": trial_name,
             "TrialComponentDisplayName": "Training",
         },
     )    
@@ -249,12 +251,13 @@ def create_model_step(
 def create_existing_model_step(
     model_name_placeholder, 
     image_uri, 
+    existing_model_uri,
     role
 ):
     # for deploying existing model
     existing_model_name = f"dm-model-{suffix}"
     existing_model = Model(
-        model_data = EXISTING_MODEL_URI,
+        model_data = existing_model_uri,
         image_uri = image_uri,
         role = role,
         name = existing_model_name
@@ -351,11 +354,11 @@ def create_check_endpoint_is_deploying_choice_step(
     wait_deployment_step = Wait(state_id = "Wait Until Deployment is Completed...", seconds = 20)
     wait_deployment_step.next(query_endpoint_deployment_lambda_step)
 
-    deployed_endpoint_updating_rule = ChoiceRule.StringEquals(variable = query_endpoint_deployment_lambda_step.output()['Payload']['endpoint_status'], value = 'Updating')
-    deployed_endpoint_updating_step.add_choice(rule = deployed_endpoint_updating_rule, next_step = wait_deployment_step)
-
     final_step = Pass(state_id = 'Pass Step')
-    deployed_endpoint_updating_step.default_choice(next_step = final_step)
+    deployed_endpoint_updating_rule = ChoiceRule.StringEquals(variable = query_endpoint_deployment_lambda_step.output()['Payload']['endpoint_status'], value = 'InService')
+    deployed_endpoint_updating_step.add_choice(rule = deployed_endpoint_updating_rule, next_step = final_step)
+    
+    deployed_endpoint_updating_step.default_choice(next_step = wait_deployment_step)
 
     return deployed_endpoint_updating_step
 
@@ -410,7 +413,8 @@ def create_workflow(
     data_file,
     topic_name,
     experiment_name,
-    workflow_name, 
+    existing_model_uri,
+    workflow_name,
     region, 
     account_id,
     workflow_execution_role,
@@ -436,29 +440,32 @@ def create_workflow(
     image_uri = sagemaker.image_uris.retrieve(region = region, framework='xgboost', version='latest')
 
     # create the steps
-    
+    trial = create_trial(experiment_name, f"xgb-processing-job-{suffix}")
     input_code_uri = upload_preprocess_code(bucket_name)
     processing_step = create_preprocessing_step(
         execution_input["PreprocessingJobName"], 
         input_code_uri, 
         data_file, 
-        experiment_name
+        experiment_name,
+        trial.trial_name,
+        sagemaker_execution_role
     )
     
-    tuning_step = create_hpo_step(execution_input["TuningJobName"], image_uri, bucket_name)
-    query_hpo_job_lambda_step = create_lambda_query_hpo_job_step()
+    tuning_step = create_hpo_step(execution_input["TuningJobName"], image_uri, bucket_name, sagemaker_execution_role)
+    query_hpo_job_lambda_step = create_lambda_query_hpo_job_step(execution_input['LambdaFunctionNameOfQueryHpoJob'])
     topic_arn = f"arn:aws:sns:{region}:{account_id}:{topic_name}"
     hpo_job_sns_notification_step = create_hpo_job_sns_notification_step(topic_arn, query_hpo_job_lambda_step)
-    training_step = create_training_step(execution_input["TrainingJobName"], image_uri, bucket_name, experiment_name, sagemaker_execution_role)
+    training_trial = create_trial(experiment_name, f"xgb-training-job-{suffix}")
+    training_step = create_training_step(execution_input["TrainingJobName"], image_uri, bucket_name, experiment_name, training_trial.trial_name, sagemaker_execution_role)
     model_step = create_model_step(execution_input["ModelName"], training_step)
-    existing_model_step = create_existing_model_step(execution_input["ModelName"], image_uri, sagemaker_execution_role)
+    existing_model_step = create_existing_model_step(execution_input["ModelName"], image_uri, existing_model_uri, sagemaker_execution_role)
     query_endpoint_lambda_step = create_lambda_query_endpoint_step(execution_input['LambdaFunctionNameOfQueryEndpoint'])
     endpoint_config_step = create_endpoint_configurgation_step(
         execution_input["EndpointConfigName"], 
         execution_input["ModelName"]
     )
-    endpoint_creation_step = create_endpoint_step(execution_input["EndpointName"], execution_input["ModelName"], False)
-    endpoint_update_step = create_endpoint_step(execution_input["EndpointName"], execution_input["ModelName"], True)
+    endpoint_creation_step = create_endpoint_step(execution_input["EndpointName"], execution_input["EndpointConfigName"], False)
+    endpoint_update_step = create_endpoint_step(execution_input["EndpointName"], execution_input["EndpointConfigName"], True)
     query_endpoint_deployment_lambda_step = create_query_endpoint_deployment_lambda_step(execution_input['LambdaFunctionNameOfQueryEndpoint'])
 
     # create the choice steps
@@ -493,7 +500,7 @@ def create_workflow(
             check_endpoint_existence_choice_step
         ]
     )
-    tuning_path = Chain([tuning_step, query_hpo_job_lambda_step, hpo_job_sns_step])
+    tuning_path = Chain([tuning_step, query_hpo_job_lambda_step, hpo_job_sns_notification_step])
 
     to_do_training_choice_step = create_to_do_training_choice_step(training_path, deploy_existing_model_path)
     to_do_hpo_choice_step = create_to_do_hpo_choice_step(tuning_path, to_do_training_choice_step)
@@ -511,11 +518,12 @@ def create_workflow(
     training_step.add_catch(catch_state_processing)
     model_step.add_catch(catch_state_processing)
     endpoint_config_step.add_catch(catch_state_processing)
-    endpoint_step.add_catch(catch_state_processing)
+    endpoint_creation_step.add_catch(catch_state_processing)
+    endpoint_update_step.add_catch(catch_state_processing)
     existing_model_step.add_catch(catch_state_processing)
     
-    workflow_graph = Chain([processing_step, to_do_hpo_choice_step])
-    # workflow_graph = Chain([to_do_hpo_choice_step])
+#     workflow_graph = Chain([processing_step, to_do_hpo_choice_step])
+    workflow_graph = Chain([to_do_hpo_choice_step])
 
     # Create Workflow
     workflow_arn = get_state_machine_arn(workflow_name, region, account_id)
@@ -548,8 +556,9 @@ def main(
     workflow_execution_role,
     sagemaker_execution_role
 ):
-
-    experiment = create_experiment()
+    
+    suffix = datetime.now().strftime("%y%m%d-%H%M%S")
+    experiment = create_experiment(f"xgboost-target-direct-marketing-{suffix}")
     # bucket_name is created in ml_pipeline_dependencies.py, which is imported at the beginning.
     workflow = create_workflow(
         bucket_name, 
@@ -561,7 +570,7 @@ def main(
         account_id,
         workflow_execution_role,
         sagemaker_execution_role
-    }
+    )
 
     # execute workflow
     suffix = datetime.now().strftime("%y%m%d-%H%M")
