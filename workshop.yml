@@ -27,12 +27,12 @@ Parameters:
     Description: Your GitHub username 
 
   GitHubRepo:
-    Default: /amazon-sagemaker-mlops-workshop
+    Default: amazon-sagemaker-mlops-workshop
     Type: String
     Description: Name of the GitHub repository
 
   GitHubBranch:
-    Default: master
+    Default: main
     Type: String
     Description: Name of the branch the code is located
 
@@ -57,7 +57,7 @@ Parameters:
 
   NotebookInstanceType:
     Type: String
-    Default: ml.t3.medium
+    Default: ml.t2.medium
     Description: Enter the SageMaker notebook instance type. 
 
   RequireModelTraining:
@@ -74,6 +74,7 @@ Parameters:
 
   NotificationEmailId:
     Type: String
+    Default: tomlu@amazon.com
     Description: Define the email id to receive model training notification.
 
   ModelTrainingNotificationTopicName:
@@ -122,7 +123,19 @@ Resources:
         - "arn:aws:iam::aws:policy/AmazonSNSFullAccess"
         - "arn:aws:iam::aws:policy/AWSCloudTrailFullAccess"
         - "arn:aws:iam::aws:policy/AWSLambdaFullAccess"        
-
+      Policies:
+        - PolicyName: CodeBuildAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Sid: EventAccess
+              Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource:
+                - arn:aws:ssm:*:*:parameter/CodeBuild/*
+                - arn:aws:ssm:*:*:parameter/ml_pipeline/*
   PipelineRole:
     Type: "AWS::IAM::Role"
     Properties:

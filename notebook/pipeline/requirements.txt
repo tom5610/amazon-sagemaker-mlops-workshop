@@ -1,0 +1,4 @@
+awscli>=1.18.140
+boto3>=1.14.35
+sagemaker>=2.0.0
+sagemaker-experiments
