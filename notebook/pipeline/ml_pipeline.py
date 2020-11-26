@@ -408,7 +408,6 @@ def create_workflow(
     data_file,
     topic_name,
     experiment_name,
-    existing_model_uri,
     workflow_name,
     region, 
     account_id,
@@ -453,6 +452,7 @@ def create_workflow(
     training_trial = create_trial(experiment_name, f"xgb-training-job-{suffix}")
     training_step = create_training_step(execution_input["TrainingJobName"], image_uri, bucket_name, experiment_name, training_trial.trial_name, sagemaker_execution_role)
     model_step = create_model_step(execution_input["ModelName"], training_step)
+    existing_model_uri = f"s3://{bucket_name}/{S3_KEY_TRAINED_MODEL}"
     existing_model_step = create_existing_model_step(execution_input["ModelName"], f"dm-model-{suffix}", image_uri, existing_model_uri, sagemaker_execution_role)
     query_endpoint_lambda_step = create_lambda_query_endpoint_step(execution_input['LambdaFunctionNameOfQueryEndpoint'])
     endpoint_config_step = create_endpoint_configurgation_step(
@@ -545,7 +545,6 @@ def main(
     bucket_name, 
     data_file,
     topic_name,
-    existing_model_uri,
     workflow_name,
     region, 
     account_id,
@@ -561,7 +560,6 @@ def main(
         data_file,
         topic_name,
         experiment.experiment_name,
-        existing_model_uri,
         workflow_name, 
         region, 
         account_id,
@@ -601,14 +599,13 @@ if __name__ == "__main__":
     parser.add_argument("--workflow-execution-role", required = True)
     parser.add_argument("--data-file", required = True)
     parser.add_argument("--topic-name", required = True)
+    parser.add_argument("--bucket-name", required = True)
     parser.add_argument("--require-hpo", required = True)
     parser.add_argument("--require-model-training", required = True)
-
+    
     args = vars(parser.parse_args())
-    args['bucket_name'] = bucket_name
     args['region'] = region
     args['sagemaker_execution_role'] = sagemaker_execution_role
     args['account_id'] = account_id
-    args['existing_model_uri'] = existing_model_uri
     print("args: {}".format(args))
     main(**args)
