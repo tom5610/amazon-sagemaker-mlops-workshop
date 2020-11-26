@@ -36,7 +36,7 @@ sagemaker_execution_role = get_execution_role()
 
 region = session.region_name
 account_id = session.client('sts').get_caller_identity().get('Account')
-bucket_name = f'xgboost-direct-marketing-{region}-{account_id}'
+bucket_name = f'directmarketing-{region}-{account_id}'
 
 TRAINED_MODEL_URI = "https://df4l9poikws9t.cloudfront.net/model/xgboost-direct-marketing/model.tar.gz"
 S3_KEY_TRAINED_MODEL = "sagemaker/model/model.tar.gz"
