@@ -603,12 +603,12 @@ if __name__ == "__main__":
     parser.add_argument("--topic-name", required = True)
     parser.add_argument("--require-hpo", required = True)
     parser.add_argument("--require-model-training", required = True)
-    parser.add_argument("--existing-model-uri")
 
     args = vars(parser.parse_args())
     args['bucket_name'] = bucket_name
     args['region'] = region
     args['sagemaker_execution_role'] = sagemaker_execution_role
     args['account_id'] = account_id
+    args['existing_model_uri'] = existing_model_uri
     print("args: {}".format(args))
     main(**args)

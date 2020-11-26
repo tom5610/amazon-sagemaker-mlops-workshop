@@ -36,3 +36,18 @@ sagemaker_execution_role = get_execution_role()
 region = session.region_name
 account_id = session.client('sts').get_caller_identity().get('Account')
 bucket_name = f'xgboost-direct-marketing-{account_id}-{region}'
+
+TRAINED_MODEL_URI = "https://df4l9poikws9t.cloudfront.net/model/xgboost-direct-marketing/model.tar.gz"
+S3_KEY_TRAINED_MODEL = "sagemaker/model/model.tar.gz"
+existing_model_uri = f"s3://{bucket_name}/{S3_KEY_TRAINED_MODEL}"
+
+def setup_trained_model(bucket_name, s3_key_trained_model):
+    # upload existing model artifact to working bucket
+    s3 = boto3.client('s3')
+
+    os.makedirs('model', exist_ok=True)
+    urllib.request.urlretrieve(TRAINED_MODEL_URI, 'model/model.tar.gz')
+    s3.upload_file('model/model.tar.gz', bucket_name, s3_key_trained_model)
+    
+if __name__ == "__main__":
+    setup_trained_model(bucket_name, S3_KEY_TRAINED_MODEL)
