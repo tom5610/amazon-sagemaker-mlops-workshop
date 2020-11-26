@@ -4,6 +4,7 @@ import re
 import uuid
 import argparse
 from datetime import datetime
+import os, urllib.request
 
 import stepfunctions
 from stepfunctions.inputs import ExecutionInput
@@ -35,7 +36,7 @@ sagemaker_execution_role = get_execution_role()
 
 region = session.region_name
 account_id = session.client('sts').get_caller_identity().get('Account')
-bucket_name = f'xgboost-direct-marketing-{account_id}-{region}'
+bucket_name = f'xgboost-direct-marketing-{region}-{account_id}'
 
 TRAINED_MODEL_URI = "https://df4l9poikws9t.cloudfront.net/model/xgboost-direct-marketing/model.tar.gz"
 S3_KEY_TRAINED_MODEL = "sagemaker/model/model.tar.gz"
