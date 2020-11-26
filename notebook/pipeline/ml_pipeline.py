@@ -28,6 +28,7 @@ def create_trial(experiment_name, trial_name):
 def create_preprocessing_step(
     processing_job_placeholder,
     input_code_uri,
+    bucket_name,
     data_file,
     experiment_name,
     trial_name,
@@ -439,6 +440,7 @@ def create_workflow(
     processing_step = create_preprocessing_step(
         execution_input["PreprocessingJobName"], 
         input_code_uri, 
+        bucket_name,
         data_file, 
         experiment_name,
         trial.trial_name,

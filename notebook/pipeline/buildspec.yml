@@ -31,7 +31,12 @@ phases:
       - echo Setup default model artifact.
       - python3 ./pipeline/ml_pipeline_dependencies.py --bucket-name ${MODEL_TRAINING_S3_BUCKET_NAME}
       - echo Display the data source files
-      - pwd
+      - cd $CODEBUILD_SRC_DIR
+      - ls -lstra
+      - echo check parent folder
+      - cd ..
+      - ls -lstra
+      - cd $CODEBUILD_SRC_DIR_DataSource
       - ls -lstra
 
   build:
