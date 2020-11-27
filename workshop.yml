@@ -540,11 +540,24 @@ Resources:
                   Repo: !Ref GitHubRepo
                   Branch: !Ref GitHubBranch
                   OAuthToken: !Ref GitHubToken
+            - Name: DataSource
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Version: "1"
+                Provider: S3
+              OutputArtifacts:
+                - Name: DataSourceOutput
+              Configuration:
+                S3Bucket: !Ref ArtifactBucket
+                S3ObjectKey: !Sub ${ModelName}/data-source.zip
+              RunOrder: 1                  
         - Name: Build
           Actions:
             - Name: SetupMLPipeline
               InputArtifacts:
                 - Name: ModelSourceOutput
+                - Name: DataSourceOutput
               OutputArtifacts:
                 - Name: BuildOutput
               ActionTypeId:
@@ -599,7 +612,21 @@ Resources:
       Name: /ml_pipeline/require_model_training
       Type: String
       Value: !Ref RequireModelTraining
-    
+
+  ModelTrainingS3BucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /ml_pipeline/model_training_s3_bucket_name
+      Type: String
+      Value: !Ref S3Bucket
+
+  PipelineArtifactS3BucketNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /ml_pipeline/pipeline_artifact_s3_bucket_name
+      Type: String
+      Value: !Ref ArtifactBucket
+
   ModelTrainingNotificationTopic:
     Type: AWS::SNS::Topic
     Properties: 
