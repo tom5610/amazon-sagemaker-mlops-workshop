@@ -344,7 +344,8 @@ def create_check_endpoint_existence_choice_step(
     return check_endpoint_existence_step
 
 def create_check_endpoint_is_deploying_choice_step(
-    query_endpoint_deployment_lambda_step
+    query_endpoint_deployment_lambda_step,
+    success_notification_step
 ):
     # check endpoint readiness
     deployed_endpoint_updating_step = Choice('Endpoint is deploying?')
@@ -352,9 +353,8 @@ def create_check_endpoint_is_deploying_choice_step(
     wait_deployment_step = Wait(state_id = "Wait Until Deployment is Completed...", seconds = 20)
     wait_deployment_step.next(query_endpoint_deployment_lambda_step)
 
-    final_step = Pass(state_id = 'Pass Step')
     deployed_endpoint_updating_rule = ChoiceRule.StringEquals(variable = query_endpoint_deployment_lambda_step.output()['Payload']['endpoint_status'], value = 'InService')
-    deployed_endpoint_updating_step.add_choice(rule = deployed_endpoint_updating_rule, next_step = final_step)
+    deployed_endpoint_updating_step.add_choice(rule = deployed_endpoint_updating_rule, next_step = success_notification_step)
     
     deployed_endpoint_updating_step.default_choice(next_step = wait_deployment_step)
 
@@ -391,6 +391,31 @@ def create_to_do_training_choice_step(
         next_step = deploy_existing_model_path
     )
     return to_do_training_choice
+
+def create_failure_notification_step(
+    topic_arn,
+    failed_state_sagemaker_pipeline_step_failure
+):
+    hpo_job_sns_step = SnsPublishStep(
+        state_id = 'SNS Notification - Pipeline Failure',
+        parameters = {
+            'TopicArn': topic_arn,
+            'Message': failed_state_sagemaker_pipeline_step_failure.output()
+        }
+    )    
+    return hpo_job_sns_step
+
+def create_success_notification_step(topic_arn):
+    hpo_job_sns_step = SnsPublishStep(
+        state_id = 'SNS Notification - Pipeline Succeeded',
+        parameters = {
+            'TopicArn': topic_arn,
+            'Message.$': "$$.Execution.Id"
+            'Subject.$': "[ML Pipeline] Execution completed successfully."
+        }
+    )    
+    return hpo_job_sns_step
+
 
 def get_state_machine_arn(workflow_name, region, account_id):
     return f"arn:aws:states:{region}:{account_id}:stateMachine:{workflow_name}"
@@ -473,8 +498,10 @@ def create_workflow(
         check_endpoint_status_choice_step,
         endpoint_creation_step
     )
+    success_notification_step = create_success_notification_step(topic_arn)
     check_endpoint_is_deploying_choice_step = create_check_endpoint_is_deploying_choice_step(
-        query_endpoint_deployment_lambda_step
+        query_endpoint_deployment_lambda_step,
+        success_notification_step
     )
 
     query_endpoint_deployment_lambda_step.next(check_endpoint_is_deploying_choice_step)
@@ -507,9 +534,11 @@ def create_workflow(
     failed_state_sagemaker_pipeline_step_failure = Fail(
         "ML Workflow Failed", cause = "SageMakerPipelineStepFailed"
     )
+    failure_notification_step = create_failure_notification_step(topic_arn, failed_state_sagemaker_pipeline_step_failure)
+    
     catch_state_processing = Catch(
         error_equals = ["States.TaskFailed"],
-        next_step = failed_state_sagemaker_pipeline_step_failure   
+        next_step = Chain([failed_state_sagemaker_pipeline_step_failure, failure_notification_step])
     )
     processing_step.add_catch(catch_state_processing)
     tuning_step.add_catch(catch_state_processing)
