@@ -395,7 +395,7 @@ def create_to_do_training_choice_step(
 def create_failure_notification_step(
     topic_arn
 ):
-    hpo_job_sns_step = SnsPublishStep(
+    failure_sns_step = SnsPublishStep(
         state_id = 'SNS Notification - Pipeline Failure',
         parameters = {
             'TopicArn': topic_arn,
@@ -403,10 +403,10 @@ def create_failure_notification_step(
             'Subject': '[ML Pipeline] Execution failed...'
         }
     )    
-    return hpo_job_sns_step
+    return failure_sns_step
 
 def create_success_notification_step(topic_arn):
-    hpo_job_sns_step = SnsPublishStep(
+    success_sns_step = SnsPublishStep(
         state_id = 'SNS Notification - Pipeline Succeeded',
         parameters = {
             'TopicArn': topic_arn,
@@ -414,7 +414,7 @@ def create_success_notification_step(topic_arn):
             'Subject': '[ML Pipeline] Execution completed successfully!'
         }
     )    
-    return hpo_job_sns_step
+    return success_sns_step
 
 
 def get_state_machine_arn(workflow_name, region, account_id):
@@ -534,7 +534,7 @@ def create_workflow(
     failed_state_sagemaker_pipeline_step_failure = Fail(
         "ML Workflow Failed", cause = "SageMakerPipelineStepFailed"
     )
-    failure_notification_step = create_failure_notification_step(topic_arn, failed_state_sagemaker_pipeline_step_failure)
+    failure_notification_step = create_failure_notification_step(topic_arn)
     
     catch_state_processing = Catch(
         error_equals = ["States.TaskFailed"],
