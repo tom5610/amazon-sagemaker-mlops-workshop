@@ -28,6 +28,7 @@ def create_trial(experiment_name, trial_name):
 def create_preprocessing_step(
     processing_job_placeholder,
     input_code_uri,
+    bucket_name,
     data_file,
     experiment_name,
     trial_name,
@@ -174,7 +175,8 @@ def create_hpo_job_sns_notification_step(
         state_id = 'SNS Notification - HPO Job',
         parameters = {
             'TopicArn': topic_arn,
-            'Message': query_hpo_job_lambda_step.output()['Payload']['bestTrainingJob']
+            'Message': query_hpo_job_lambda_step.output()['Payload']['bestTrainingJob'],
+            'Subject': "[ML Pipeline] HPO Job - Best Training Job"
         }
     )    
     return hpo_job_sns_step
@@ -317,12 +319,16 @@ def create_check_endpoint_status_choice_step(
     query_endpoint_lambda_step,
     endpoint_update_step
 ):
-    check_endpoint_status_step = Choice('Endpoint is InService?')
+    check_endpoint_status_step = Choice('Endpoint is ready for deployment?')
 
     endpoint_in_service_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'InService')
     check_endpoint_status_step.add_choice(rule = endpoint_in_service_rule, next_step = endpoint_update_step)
+    
+    # in case endpoint is in 'failed' state, we allow it to update so as to trigger exception.
+    endpoint_failed_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'Failed')
+    check_endpoint_status_step.add_choice(rule = endpoint_failed_rule, next_step = endpoint_update_step)
 
-    wait_step = Wait(state_id = f"Wait Until Endpoint becomes InService", seconds = 20)
+    wait_step = Wait(state_id = f"Wait until Endpoint is ready", seconds = 20)
     wait_step.next(query_endpoint_lambda_step)
     check_endpoint_status_step.default_choice(next_step = wait_step)  
 
@@ -342,7 +348,8 @@ def create_check_endpoint_existence_choice_step(
     return check_endpoint_existence_step
 
 def create_check_endpoint_is_deploying_choice_step(
-    query_endpoint_deployment_lambda_step
+    query_endpoint_deployment_lambda_step,
+    success_notification_step
 ):
     # check endpoint readiness
     deployed_endpoint_updating_step = Choice('Endpoint is deploying?')
@@ -350,9 +357,8 @@ def create_check_endpoint_is_deploying_choice_step(
     wait_deployment_step = Wait(state_id = "Wait Until Deployment is Completed...", seconds = 20)
     wait_deployment_step.next(query_endpoint_deployment_lambda_step)
 
-    final_step = Pass(state_id = 'Pass Step')
     deployed_endpoint_updating_rule = ChoiceRule.StringEquals(variable = query_endpoint_deployment_lambda_step.output()['Payload']['endpoint_status'], value = 'InService')
-    deployed_endpoint_updating_step.add_choice(rule = deployed_endpoint_updating_rule, next_step = final_step)
+    deployed_endpoint_updating_step.add_choice(rule = deployed_endpoint_updating_rule, next_step = success_notification_step)
     
     deployed_endpoint_updating_step.default_choice(next_step = wait_deployment_step)
 
@@ -390,6 +396,30 @@ def create_to_do_training_choice_step(
     )
     return to_do_training_choice
 
+def create_failure_notification_step(
+    topic_arn
+):
+    failure_sns_step = SnsPublishStep(
+        state_id = 'SNS Notification - Pipeline Failure',
+        parameters = {
+            'TopicArn': topic_arn,
+            'Message.$': "$",
+            'Subject': '[ML Pipeline] Execution failed...'
+        }
+    )    
+    return failure_sns_step
+
+def create_success_notification_step(topic_arn):
+    success_sns_step = SnsPublishStep(
+        state_id = 'SNS Notification - Pipeline Succeeded',
+        parameters = {
+            'TopicArn': topic_arn,
+            'Message.$': "$$.Execution.Id",
+            'Subject': '[ML Pipeline] Execution completed successfully!'
+        }
+    )    
+    return success_sns_step
+
 def get_state_machine_arn(workflow_name, region, account_id):
     return f"arn:aws:states:{region}:{account_id}:stateMachine:{workflow_name}"
 
@@ -408,7 +438,6 @@ def create_workflow(
     data_file,
     topic_name,
     experiment_name,
-    existing_model_uri,
     workflow_name,
     region, 
     account_id,
@@ -440,6 +469,7 @@ def create_workflow(
     processing_step = create_preprocessing_step(
         execution_input["PreprocessingJobName"], 
         input_code_uri, 
+        bucket_name,
         data_file, 
         experiment_name,
         trial.trial_name,
@@ -453,6 +483,7 @@ def create_workflow(
     training_trial = create_trial(experiment_name, f"xgb-training-job-{suffix}")
     training_step = create_training_step(execution_input["TrainingJobName"], image_uri, bucket_name, experiment_name, training_trial.trial_name, sagemaker_execution_role)
     model_step = create_model_step(execution_input["ModelName"], training_step)
+    existing_model_uri = f"s3://{bucket_name}/{S3_KEY_TRAINED_MODEL}"
     existing_model_step = create_existing_model_step(execution_input["ModelName"], f"dm-model-{suffix}", image_uri, existing_model_uri, sagemaker_execution_role)
     query_endpoint_lambda_step = create_lambda_query_endpoint_step(execution_input['LambdaFunctionNameOfQueryEndpoint'])
     endpoint_config_step = create_endpoint_configurgation_step(
@@ -470,8 +501,10 @@ def create_workflow(
         check_endpoint_status_choice_step,
         endpoint_creation_step
     )
+    success_notification_step = create_success_notification_step(topic_arn)
     check_endpoint_is_deploying_choice_step = create_check_endpoint_is_deploying_choice_step(
-        query_endpoint_deployment_lambda_step
+        query_endpoint_deployment_lambda_step,
+        success_notification_step
     )
 
     query_endpoint_deployment_lambda_step.next(check_endpoint_is_deploying_choice_step)
@@ -504,9 +537,11 @@ def create_workflow(
     failed_state_sagemaker_pipeline_step_failure = Fail(
         "ML Workflow Failed", cause = "SageMakerPipelineStepFailed"
     )
+    failure_notification_step = create_failure_notification_step(topic_arn)
+    
     catch_state_processing = Catch(
         error_equals = ["States.TaskFailed"],
-        next_step = failed_state_sagemaker_pipeline_step_failure   
+        next_step = Chain([failure_notification_step, failed_state_sagemaker_pipeline_step_failure])
     )
     processing_step.add_catch(catch_state_processing)
     tuning_step.add_catch(catch_state_processing)
@@ -545,7 +580,6 @@ def main(
     bucket_name, 
     data_file,
     topic_name,
-    existing_model_uri,
     workflow_name,
     region, 
     account_id,
@@ -561,7 +595,6 @@ def main(
         data_file,
         topic_name,
         experiment.experiment_name,
-        existing_model_uri,
         workflow_name, 
         region, 
         account_id,
@@ -601,14 +634,13 @@ if __name__ == "__main__":
     parser.add_argument("--workflow-execution-role", required = True)
     parser.add_argument("--data-file", required = True)
     parser.add_argument("--topic-name", required = True)
+    parser.add_argument("--bucket-name", required = True)
     parser.add_argument("--require-hpo", required = True)
     parser.add_argument("--require-model-training", required = True)
-
+    
     args = vars(parser.parse_args())
-    args['bucket_name'] = bucket_name
     args['region'] = region
     args['sagemaker_execution_role'] = sagemaker_execution_role
     args['account_id'] = account_id
-    args['existing_model_uri'] = existing_model_uri
     print("args: {}".format(args))
     main(**args)

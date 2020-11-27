@@ -4,6 +4,7 @@ import re
 import uuid
 import argparse
 from datetime import datetime
+import os, urllib.request
 
 import stepfunctions
 from stepfunctions.inputs import ExecutionInput
@@ -35,11 +36,9 @@ sagemaker_execution_role = get_execution_role()
 
 region = session.region_name
 account_id = session.client('sts').get_caller_identity().get('Account')
-bucket_name = f'xgboost-direct-marketing-{account_id}-{region}'
 
 TRAINED_MODEL_URI = "https://df4l9poikws9t.cloudfront.net/model/xgboost-direct-marketing/model.tar.gz"
 S3_KEY_TRAINED_MODEL = "sagemaker/model/model.tar.gz"
-existing_model_uri = f"s3://{bucket_name}/{S3_KEY_TRAINED_MODEL}"
 
 def setup_trained_model(bucket_name, s3_key_trained_model):
     # upload existing model artifact to working bucket
@@ -49,5 +48,13 @@ def setup_trained_model(bucket_name, s3_key_trained_model):
     urllib.request.urlretrieve(TRAINED_MODEL_URI, 'model/model.tar.gz')
     s3.upload_file('model/model.tar.gz', bucket_name, s3_key_trained_model)
     
-if __name__ == "__main__":
+def main(bucket_name):
     setup_trained_model(bucket_name, S3_KEY_TRAINED_MODEL)
+    
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Load parameters")
+    parser.add_argument("--bucket-name", required = True)
+    args = vars(parser.parse_args())
+    print("args: {}".format(args))
+    main(**args)
+    
