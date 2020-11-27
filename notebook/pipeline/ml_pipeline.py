@@ -411,7 +411,7 @@ def create_success_notification_step(topic_arn):
         parameters = {
             'TopicArn': topic_arn,
             'Message.$': "$$.Execution.Id"
-            'Subject.$': "[ML Pipeline] Execution completed successfully."
+            'Subject': '[ML Pipeline] Execution completed successfully!'
         }
     )    
     return hpo_job_sns_step
