@@ -51,6 +51,5 @@ phases:
 
 artifacts:
   files:
-    - $CODEBUILD_SRC_DIR/$SUB_PATH/*.json
-    - $CODEBUILD_SRC_DIR/$SUB_PATH/*.yml
+    - $CODEBUILD_SRC_DIR/$SUB_PATH/*.txt
   discard-paths: yes

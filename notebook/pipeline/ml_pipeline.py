@@ -321,6 +321,7 @@ def create_check_endpoint_status_choice_step(
     check_endpoint_status_step = Choice('Endpoint is InService?')
 
     endpoint_in_service_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'InService')
+    endpoint_in_service_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'Failed')
     check_endpoint_status_step.add_choice(rule = endpoint_in_service_rule, next_step = endpoint_update_step)
 
     wait_step = Wait(state_id = f"Wait Until Endpoint becomes InService", seconds = 20)
