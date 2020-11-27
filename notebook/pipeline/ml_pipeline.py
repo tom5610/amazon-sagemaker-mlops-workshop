@@ -410,7 +410,7 @@ def create_success_notification_step(topic_arn):
         state_id = 'SNS Notification - Pipeline Succeeded',
         parameters = {
             'TopicArn': topic_arn,
-            'Message.$': "$$.Execution.Id"
+            'Message.$': "$$.Execution.Id",
             'Subject': '[ML Pipeline] Execution completed successfully!'
         }
     )    
