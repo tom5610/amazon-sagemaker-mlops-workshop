@@ -175,7 +175,8 @@ def create_hpo_job_sns_notification_step(
         state_id = 'SNS Notification - HPO Job',
         parameters = {
             'TopicArn': topic_arn,
-            'Message': query_hpo_job_lambda_step.output()['Payload']['bestTrainingJob']
+            'Message': query_hpo_job_lambda_step.output()['Payload']['bestTrainingJob'],
+            'Subject': "[ML Pipeline] HPO Job - Best Training Job"
         }
     )    
     return hpo_job_sns_step
@@ -318,13 +319,16 @@ def create_check_endpoint_status_choice_step(
     query_endpoint_lambda_step,
     endpoint_update_step
 ):
-    check_endpoint_status_step = Choice('Endpoint is InService?')
+    check_endpoint_status_step = Choice('Endpoint is ready for deployment?')
 
     endpoint_in_service_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'InService')
-    endpoint_in_service_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'Failed')
     check_endpoint_status_step.add_choice(rule = endpoint_in_service_rule, next_step = endpoint_update_step)
+    
+    # in case endpoint is in 'failed' state, we allow it to update so as to trigger exception.
+    endpoint_failed_rule = ChoiceRule.StringEquals(variable = query_endpoint_lambda_step.output()['Payload']['endpoint_status'], value = 'Failed')
+    check_endpoint_status_step.add_choice(rule = endpoint_failed_rule, next_step = endpoint_update_step)
 
-    wait_step = Wait(state_id = f"Wait Until Endpoint becomes InService", seconds = 20)
+    wait_step = Wait(state_id = f"Wait until Endpoint is ready", seconds = 20)
     wait_step.next(query_endpoint_lambda_step)
     check_endpoint_status_step.default_choice(next_step = wait_step)  
 
@@ -415,7 +419,6 @@ def create_success_notification_step(topic_arn):
         }
     )    
     return success_sns_step
-
 
 def get_state_machine_arn(workflow_name, region, account_id):
     return f"arn:aws:states:{region}:{account_id}:stateMachine:{workflow_name}"
