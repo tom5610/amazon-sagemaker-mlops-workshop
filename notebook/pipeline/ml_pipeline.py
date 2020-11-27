@@ -393,14 +393,14 @@ def create_to_do_training_choice_step(
     return to_do_training_choice
 
 def create_failure_notification_step(
-    topic_arn,
-    failed_state_sagemaker_pipeline_step_failure
+    topic_arn
 ):
     hpo_job_sns_step = SnsPublishStep(
         state_id = 'SNS Notification - Pipeline Failure',
         parameters = {
             'TopicArn': topic_arn,
-            'Message': failed_state_sagemaker_pipeline_step_failure.output()
+            'Message.$': "$",
+            'Subject': '[ML Pipeline] Execution failed...'
         }
     )    
     return hpo_job_sns_step
@@ -538,7 +538,7 @@ def create_workflow(
     
     catch_state_processing = Catch(
         error_equals = ["States.TaskFailed"],
-        next_step = Chain([failed_state_sagemaker_pipeline_step_failure, failure_notification_step])
+        next_step = Chain([failure_notification_step, failed_state_sagemaker_pipeline_step_failure])
     )
     processing_step.add_catch(catch_state_processing)
     tuning_step.add_catch(catch_state_processing)
