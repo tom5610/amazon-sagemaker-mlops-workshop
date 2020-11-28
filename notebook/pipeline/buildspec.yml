@@ -10,6 +10,8 @@ env:
     REQUIRE_MODEL_TRAINING: /ml_pipeline/require_model_training
     NOTIFICATION_TOPIC_NAME: /ml_pipeline/workflow_notification_topic_name
     MODEL_TRAINING_S3_BUCKET_NAME: /ml_pipeline/model_training_s3_bucket_name
+    QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME: /ml_pipeline/query_endpoint
+    QUERY_HPO_JOB_LAMBDA_FUNCTION_NAME: /ml_pipeline/query_hpo_job
 
 phases:
   install:
@@ -40,7 +42,9 @@ phases:
       - echo Build started on `date`
       - cd $CODEBUILD_SRC_DIR/$SUB_PATH
       - echo Create ML Pipeline
-      - python3 ./pipeline/ml_pipeline.py --workflow-name ${WORKFLOW_NAME} --workflow-execution-role ${WORKFLOW_EXECUTION_ROLE} --data-file  "bank-additional-full.csv" --topic-name ${NOTIFICATION_TOPIC_NAME} --require-hpo ${REQUIRE_HPO} --require-model-training ${REQUIRE_MODEL_TRAINING}  --bucket-name ${MODEL_TRAINING_S3_BUCKET_NAME}
+      - python3 ./pipeline/ml_pipeline.py --workflow-name ${WORKFLOW_NAME} --workflow-execution-role ${WORKFLOW_EXECUTION_ROLE} --data-file  "bank-additional-full.csv" --topic-name ${NOTIFICATION_TOPIC_NAME} --require-hpo ${REQUIRE_HPO} --require-model-training ${REQUIRE_MODEL_TRAINING}  --bucket-name ${MODEL_TRAINING_S3_BUCKET_NAME} --query-endpoint-lambda-function-name ${QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME} --query-hpo-job-lambda-function-name ${QUERY_HPO_JOB_LAMBDA_FUNCTION_NAME}
+
+
       - echo $CODEBUILD_RESOLVED_SOURCE_VERSION > commit.txt
       - echo $CODEBUILD_BUILD_ID >> commit.txt # Add build ID when commit doesn't change
 

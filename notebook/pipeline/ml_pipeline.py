@@ -584,7 +584,9 @@ def main(
     region, 
     account_id,
     workflow_execution_role,
-    sagemaker_execution_role
+    sagemaker_execution_role,
+    query_endpoint_lambda_function_name,
+    query_hpo_job_lambda_function_name
 ):
     
     suffix = datetime.now().strftime("%y%m%d-%H%M%S")
@@ -610,8 +612,6 @@ def main(
     model_job_name = f"dm-model-{suffix}"
     endpoint_config_name = f"dm-endpoint-config-{suffix}"
     endpoint_job_name = f"direct-marketing-endpoint"
-    lambda_function_query_endpoint = 'query_endpoint'
-    lambda_function_query_hpo_job = 'query_hpo_job'
 
     execution = workflow.execute(
         inputs = {
@@ -623,8 +623,8 @@ def main(
             "ModelName": model_job_name,
             "EndpointConfigName": endpoint_config_name,
             "EndpointName": endpoint_job_name,
-            "LambdaFunctionNameOfQueryEndpoint": lambda_function_query_endpoint,
-            "LambdaFunctionNameOfQueryHpoJob": lambda_function_query_hpo_job
+            "LambdaFunctionNameOfQueryEndpoint": query_endpoint_lambda_function_name,
+            "LambdaFunctionNameOfQueryHpoJob": query_hpo_job_lambda_function_name
         }
     )
 
@@ -637,6 +637,8 @@ if __name__ == "__main__":
     parser.add_argument("--bucket-name", required = True)
     parser.add_argument("--require-hpo", required = True)
     parser.add_argument("--require-model-training", required = True)
+    parser.add_argument("--require-model-training", required = True)
+
     
     args = vars(parser.parse_args())
     args['region'] = region

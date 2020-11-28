@@ -636,6 +636,122 @@ Resources:
           Protocol: "email"
       TopicName: !Ref ModelTrainingNotificationTopicName
 
+
+  QueryEndpointLambdaFunctionNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /ml_pipeline/query_endpoint
+      Type: String
+      Value: !Sub ${ModelName}_query_endpoint
+
+  QueryHpoJobLambdaFunctionNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /ml_pipeline/query_hpo_job
+      Type: String
+      Value: !Sub ${ModelName}_query_hpo_job
+      
+QueryEndpointLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub ${ModelName}_query_endpoint
+      Description: Query Endpoint information.
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt SageMakerRole.Arn
+      Runtime: python3.7
+      Timeout: 15
+      Code:
+        ZipFile: |
+          import boto3
+          import logging
+          import json
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          sm_client = boto3.client('sagemaker')
+
+          #Retrieve endpoint existence and status info.
+          def lambda_handler(event, context):
+
+              if ('EndpointName' in event):
+                  endpoint_name = event['EndpointName']
+              else:
+                  raise KeyError('EndpointName key not found in function input!'+
+                                ' The input received was: {}.'.format(json.dumps(event)))
+
+              #Query boto3 API to check Endpoint.
+              endpoint_existed = False
+              endpoint_status = None
+              try:
+                  response = sm_client.describe_endpoint(EndpointName = endpoint_name)
+                  endpoint_existed = True
+                  endpoint_status = response['EndpointStatus']
+                  logger.info("Endpoint:{} has status:{}.".format(endpoint_name, endpoint_status))
+              except Exception as e:
+                  response = ('Failed to read endpoint info!'+ 
+                              ' The endpoint may not exist or the endpoint name may be incorrect.'+ 
+                              ' Check SageMaker to confirm the endpoint name.')
+                  print(e)
+                  print('{} Attempted to read endpoint name: {}.'.format(response, endpoint_name))
+
+              return {
+                  'statusCode': 200,
+                  'endpoint_existed': endpoint_existed,
+                  'endpoint_status': endpoint_status
+              }
+  
+  QueryHpoJobLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Sub ${ModelName}_query_hpo_job
+      Description: Query HPO Job information.
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !GetAtt SageMakerRole.Arn
+      Runtime: python3.7
+      Timeout: 15
+      Code:
+        ZipFile: |        
+          import boto3
+          import logging
+          import json
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          sm_client = boto3.client('sagemaker')
+
+          #Retrieve Hyperparameters Tuning Job infomation.
+          def lambda_handler(event, context):
+
+              if ('HpoJobName' in event):
+                  hpo_job_name = event['HpoJobName']
+
+              else:
+                  raise KeyError('HpoJobName key not found in function input!'+
+                                ' The input received was: {}.'.format(json.dumps(event)))
+
+              #Query boto3 API to check training status.
+              response = sm_client.describe_hyper_parameter_tuning_job(HyperParameterTuningJobName = hpo_job_name)
+              best_training_job = response['BestTrainingJob']
+              final_hpo_objective_metric = best_training_job['FinalHyperParameterTuningJobObjectiveMetric']
+
+              response = sm_client.describe_training_job(TrainingJobName = best_training_job['TrainingJobName'])
+              logger.info("HPO Job:{} 's best training job':{}.".format(hpo_job_name, best_training_job['TrainingJobName']))
+              
+
+
+              return {
+                  'statusCode': 200,
+                  'bestTrainingJob': {
+                      'trainingJobName': response['TrainingJobName'],
+                      'finalHyperParameterTuningJobObjectiveMetric': final_hpo_objective_metric,
+                      'modelArtifacts': response['ModelArtifacts'],
+                      'hyperParameters': response['HyperParameters']
+                  }
+              }        
+        
+
 Outputs:        
   S3Bucket:
     Value: !Ref "S3Bucket"
