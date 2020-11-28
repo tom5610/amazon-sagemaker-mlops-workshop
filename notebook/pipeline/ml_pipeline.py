@@ -637,8 +637,8 @@ if __name__ == "__main__":
     parser.add_argument("--bucket-name", required = True)
     parser.add_argument("--require-hpo", required = True)
     parser.add_argument("--require-model-training", required = True)
-    parser.add_argument("--require-model-training", required = True)
-
+    parser.add_argument("--query-endpoint-lambda-function-name", required = True)
+    parser.add_argument("--query-hpo-job-lambda-function-name", required = True)
     
     args = vars(parser.parse_args())
     args['region'] = region
