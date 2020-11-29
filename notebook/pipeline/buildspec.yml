@@ -41,7 +41,7 @@ phases:
     commands:
       - echo Build started on `date`
       - cd $CODEBUILD_SRC_DIR/$SUB_PATH
-      - echo Create / Update Workflow (State Machine in Step Functions
+      - echo Create or Update Workflow - State Machine in Step Functions
       - python3 ./pipeline/ml_pipeline.py --workflow-name ${WORKFLOW_NAME} --workflow-execution-role ${WORKFLOW_EXECUTION_ROLE} --data-file  "bank-additional-full.csv" --topic-name ${NOTIFICATION_TOPIC_NAME} --bucket-name ${MODEL_TRAINING_S3_BUCKET_NAME} 
       - echo Create Workflow Execution Input file
       - python3 ./pipeline/ml_pipeline_input.py --require-hpo ${REQUIRE_HPO} --require-model-training ${REQUIRE_MODEL_TRAINING}  --query-endpoint-lambda-function-name ${QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME} --query-hpo-job-lambda-function-name ${QUERY_HPO_JOB_LAMBDA_FUNCTION_NAME} --input-file-path "./input.json"
