@@ -8,6 +8,7 @@ sm_client = boto3.client('sagemaker')
 
 #Retrieve endpoint existence and status info.
 def lambda_handler(event, context):
+    logger.info(f"Input parameters: {json.dumps(event)}")
 
     endpoint_config_name = get_value("EndpointConfigName", event)
 
@@ -19,7 +20,7 @@ def lambda_handler(event, context):
     prd_endpoint_config = get_endpoint_config(prd_endpoint_name)
     prd_model_name = prd_endpoint_config['ProductionVariants'][0]['ModelName']
 
-    sm.create_endpoint_config(
+    sm_client.create_endpoint_config(
         EndpointConfigName = endpoint_config_name,
         ProductionVariants = [
             {
@@ -41,16 +42,16 @@ def lambda_handler(event, context):
 
     return {
         'dev_prd_model_in_sync': (dev_model_name == prd_model_name),
-        'endpoint_existed': endpoint_existed,
-        'endpoint_status': endpoint_status
+        'blue_model_name': prd_model_name,
+        'green_model_name': dev_model_name
     }
 
 def get_value(key, event):
     if (key in event):
-        dev_endpoint_name = event[key]
+        return event[key]
     else:
         raise KeyError(f'{key} key not found in function input!'+
-                      ' The input received was: {}.'.format(json.dumps(event)))
+                      f' The input received was: {json.dumps(event)}.')
 
 def get_endpoint_config(endpoint_name):
     response = sm_client.describe_endpoint(EndpointName = endpoint_name)
