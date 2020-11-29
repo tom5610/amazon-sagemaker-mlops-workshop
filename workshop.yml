@@ -173,6 +173,11 @@ Resources:
                 Action:
                   - iam:PassRole
                 Resource: !GetAtt MLOpsRole.Arn
+              - Sid: StepFunctionsExecution
+                Effect: Allow
+                Action:
+                  - states:*
+                Resource: "*"
 
   MLOpsRole:
     Type: "AWS::IAM::Role"
@@ -580,9 +585,9 @@ Resources:
                 Version: "1"
                 Provider: StepFunctions
               Configuration:
-                StateMachineArn: !Sub "'arn:aws:states:{AWS::Region}:${AWS::AccountId}:stateMachine:${ModelName}-dev-model-training-pipeline"
+                StateMachineArn: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${ModelName}-dev-model-training-pipeline"
                 InputType: FilePath
-                Input: notebook/input.json
+                Input: PipelineBuildOutput::input.json
               RunOrder: 2
         - Name: ApproveProductionDeployment
           Actions:
