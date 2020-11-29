@@ -575,8 +575,6 @@ def create_workflow(
     
     
 def main(
-    require_hpo,
-    require_model_training,
     bucket_name, 
     data_file,
     topic_name,
@@ -584,11 +582,10 @@ def main(
     region, 
     account_id,
     workflow_execution_role,
-    sagemaker_execution_role,
-    query_endpoint_lambda_function_name,
-    query_hpo_job_lambda_function_name
+    sagemaker_execution_role
 ):
     
+    # todo use an existing experiment instead of creating a new one every time.
     suffix = datetime.now().strftime("%y%m%d-%H%M%S")
     experiment = create_experiment(f"xgboost-target-direct-marketing-{suffix}")
     # bucket_name is created in ml_pipeline_dependencies.py, which is imported at the beginning.
@@ -604,30 +601,6 @@ def main(
         sagemaker_execution_role
     )
     
-    # execute workflow
-    # execution input parameter values
-    preprocessing_job_name = f"dm-preprocessing-{suffix}"
-    tuning_job_name = f"dm-tuning-{suffix}"
-    training_job_name = f"dm-training-{suffix}"
-    model_job_name = f"dm-model-{suffix}"
-    endpoint_config_name = f"dm-endpoint-config-{suffix}"
-    endpoint_job_name = f"direct-marketing-endpoint"
-
-    execution = workflow.execute(
-        inputs = {
-            "PreprocessingJobName": preprocessing_job_name,
-            "ToDoHPO": str(require_hpo).lower() in ['true', '1', 'yes', 't'],
-            "ToDoTraining": str(require_model_training).lower() in ['true', '1', 'yes', 't'],
-            "TrainingJobName": training_job_name,
-            "TuningJobName": tuning_job_name,
-            "ModelName": model_job_name,
-            "EndpointConfigName": endpoint_config_name,
-            "EndpointName": endpoint_job_name,
-            "LambdaFunctionNameOfQueryEndpoint": query_endpoint_lambda_function_name,
-            "LambdaFunctionNameOfQueryHpoJob": query_hpo_job_lambda_function_name
-        }
-    )
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load parameters")
     parser.add_argument("--workflow-name", required = True)
@@ -635,10 +608,6 @@ if __name__ == "__main__":
     parser.add_argument("--data-file", required = True)
     parser.add_argument("--topic-name", required = True)
     parser.add_argument("--bucket-name", required = True)
-    parser.add_argument("--require-hpo", required = True)
-    parser.add_argument("--require-model-training", required = True)
-    parser.add_argument("--query-endpoint-lambda-function-name", required = True)
-    parser.add_argument("--query-hpo-job-lambda-function-name", required = True)
     
     args = vars(parser.parse_args())
     args['region'] = region

@@ -552,14 +552,14 @@ Resources:
                 S3Bucket: !Ref ArtifactBucket
                 S3ObjectKey: !Sub ${ModelName}/data-source.zip
               RunOrder: 1                  
-        - Name: Build
+        - Name: DevModelTraining
           Actions:
             - Name: SetupMLPipeline
               InputArtifacts:
                 - Name: ModelSourceOutput
                 - Name: DataSourceOutput
               OutputArtifacts:
-                - Name: BuildOutput
+                - Name: PipelineBuildOutput
               ActionTypeId:
                 Category: Build
                 Owner: AWS
@@ -569,6 +569,31 @@ Resources:
                 ProjectName: !Ref BuildProject
                 PrimarySource: ModelSourceOutput
               RunOrder: 1
+            - Name: ExecutePipeline
+              InputArtifacts:
+                - Name: PipelineBuildOutput
+              OutputArtifacts:
+                - Name: PipelineExecutionOutput
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: "1"
+                Provider: StepFunctions
+              Configuration:
+                StateMachineArn: !Sub "'arn:aws:states:{AWS::Region}:${AWS::AccountId}:stateMachine:${ModelName}-dev-model-training-pipeline"
+                InputType: FilePath
+                Input: notebook/input.json
+              RunOrder: 2
+        - Name: ApproveProductionDeployment
+          Actions:
+            - Name: ApproveDeploy
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Version: "1"
+                Provider: Manual
+              Configuration:
+                CustomData: "Deploy Model to Production Environment? (Please check the evaluation report before doing so)"          
               
   ArtifactBucket:
     Type: AWS::S3::Bucket
@@ -597,7 +622,7 @@ Resources:
     Properties:
       Name: /ml_pipeline/workflow_name
       Type: String
-      Value: !Sub ${ModelName}-dev-pipeline
+      Value: !Sub ${ModelName}-dev-model-training-pipeline
 
   RequireHPOParameter:
     Type: AWS::SSM::Parameter
@@ -651,11 +676,10 @@ Resources:
       Type: String
       Value: !Sub ${ModelName}_query_hpo_job
       
-QueryEndpointLambdaFunction:
+  QueryEndpointLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       FunctionName: !Sub ${ModelName}_query_endpoint
-      Description: Query Endpoint information.
       Handler: index.lambda_handler
       MemorySize: 128
       Role: !GetAtt SageMakerRole.Arn
@@ -700,12 +724,13 @@ QueryEndpointLambdaFunction:
                   'endpoint_existed': endpoint_existed,
                   'endpoint_status': endpoint_status
               }
-  
+
+      Description: Query Endpoint information.
+
   QueryHpoJobLambdaFunction:
     Type: "AWS::Lambda::Function"
     Properties:
       FunctionName: !Sub ${ModelName}_query_hpo_job
-      Description: Query HPO Job information.
       Handler: index.lambda_handler
       MemorySize: 128
       Role: !GetAtt SageMakerRole.Arn
@@ -751,6 +776,7 @@ QueryEndpointLambdaFunction:
                   }
               }        
         
+      Description: Query HPO Job information.
 
 Outputs:        
   S3Bucket:
