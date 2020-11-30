@@ -5,6 +5,8 @@ import json
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 sm_client = boto3.client('sagemaker')
+BLUE_VARIANT = 'blue-variant'
+GREEN_VARIANT = 'green-variant'
 
 #Retrieve endpoint existence and status info.
 def lambda_handler(event, context):
@@ -13,31 +15,17 @@ def lambda_handler(event, context):
     endpoint_config_name = get_value("EndpointConfigName", event)
 
     dev_endpoint_name = get_value('DevEndpointName', event)
-    dev_endpoint_config = get_endpoint_config(dev_endpoint_name)
-    dev_model_name = dev_endpoint_config['ProductionVariants'][0]['ModelName']
+    dev_model_name = get_model_on_endpoint(dev_endpoint_name)
 
     prd_endpoint_name = get_value('PrdEndpointName', event)
-    prd_endpoint_config = get_endpoint_config(prd_endpoint_name)
-    prd_model_name = prd_endpoint_config['ProductionVariants'][0]['ModelName']
+    prd_model_name = get_model_on_endpoint(prd_endpoint_name)
+    
+    production_variants = get_production_variants(prd_model_name, dev_model_name)
+        
 
     sm_client.create_endpoint_config(
         EndpointConfigName = endpoint_config_name,
-        ProductionVariants = [
-            {
-                'VariantName': 'blue-variant',
-                'ModelName': prd_model_name,
-                'InitialInstanceCount': 1,
-                'InstanceType': 'ml.m5.large',
-                'InitialVariantWeight': 9
-            },    
-            {
-                'VariantName': 'green-variant',
-                'ModelName': dev_model_name,
-                'InitialInstanceCount': 1,
-                'InstanceType': 'ml.m5.large',
-                'InitialVariantWeight': 1
-        }
-        ]
+        ProductionVariants = production_variants
     )
 
     return {
@@ -46,6 +34,24 @@ def lambda_handler(event, context):
         'green_model_name': dev_model_name
     }
 
+def get_production_variant(variant_name, model_name, initial_variant_weight):
+    return None if model_name == None else {
+        'VariantName': variant_name,
+        'ModelName': model_name,
+        'InitialInstanceCount': 1,
+        'InstanceType': 'ml.m5.large',
+        'InitialVariantWeight': initial_variant_weight
+    }
+
+def get_production_variants(prd_model_name, dev_model_name):
+    production_variants = []
+    # always set production environment model as the first one.
+    if prd_model_name:
+        production_variants.append(get_production_variant(BLUE_VARIANT, prd_model_name, 9)) # setup weight as 9 for initial blue/green setting
+    if dev_model_name:
+        production_variants.append(get_production_variant(GREEN_VARIANT, dev_model_name, 1))
+    return production_variants  
+
 def get_value(key, event):
     if (key in event):
         return event[key]
@@ -53,7 +59,13 @@ def get_value(key, event):
         raise KeyError(f'{key} key not found in function input!'+
                       f' The input received was: {json.dumps(event)}.')
 
-def get_endpoint_config(endpoint_name):
-    response = sm_client.describe_endpoint(EndpointName = endpoint_name)
-    endpoint_config_name = response['EndpointConfigName']
-    return sm_client.describe_endpoint_config(EndpointConfigName = endpoint_config_name)
+def get_model_on_endpoint(endpoint_name):
+    response = sm_client.list_endpoints(NameContains = endpoint_name)
+    if len(response['Endpoints']) == 0:
+        model_name = None
+    else:
+        response = sm_client.describe_endpoint(EndpointName = endpoint_name)
+        endpoint_config_name = response['EndpointConfigName']
+        endpoint_config = sm_client.describe_endpoint_config(EndpointConfigName = endpoint_config_name)
+        model_name = endpoint_config['ProductionVariants'][0]['ModelName']
+    return model_name
