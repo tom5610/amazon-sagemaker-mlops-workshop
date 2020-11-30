@@ -5,8 +5,6 @@ import uuid
 import argparse
 from datetime import datetime, date, timedelta
 import os, urllib.request
-import pandas as pd
-import numpy as np
 
 import stepfunctions
 from stepfunctions.inputs import ExecutionInput
