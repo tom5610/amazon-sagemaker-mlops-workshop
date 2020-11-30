@@ -1,0 +1,49 @@
+version: 0.2
+
+env:
+  variables:
+    SUB_PATH: notebook
+  parameter-store:
+    WORKFLOW_EXECUTION_ROLE: /ml_pipeline/workflow_execution_role
+    WORKFLOW_NAME: /ml_pipeline/prd_workflow_name
+    NOTIFICATION_TOPIC_NAME: /ml_pipeline/workflow_notification_topic_name
+    QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME: /ml_pipeline/query_endpoint
+    CREATE_BLUE_GREEN_ENDPOING_CONFIG_LAMBDA_FUNCTION_NAME: /ml_pipeline/create_blue_green_endpoint_config
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.7
+    commands:
+      - echo "Installing requirements"
+      - pip install -r $CODEBUILD_SRC_DIR/$SUB_PATH/pipeline/requirements.txt
+
+  pre_build:
+    commands:
+      - echo List source files
+      - echo Get pipeline name
+      - export PIPELINE_NAME=${CODEBUILD_INITIATOR#codepipeline}
+      - echo $PIPELINE_NAME
+      - echo $ECR_REPO_NAME is the target preprocessing container repo name.
+
+  build:
+    commands:
+      - echo Build started on `date`
+      - cd $CODEBUILD_SRC_DIR/$SUB_PATH
+      - echo Create or Update Workflow - State Machine in Step Functions
+      - python3 ./pipeline/prod_deployment_pipeline.py --workflow-name ${WORKFLOW_NAME} --workflow-execution-role ${WORKFLOW_EXECUTION_ROLE} --topic-name ${NOTIFICATION_TOPIC_NAME} 
+      - echo Create Workflow Execution Input file
+      - python3 ./pipeline/prod_deployment_pipeline_input --dev-endpoint-name "direct-marketing-endpoint-dev" --prd-endpoint-name "direct-marketing-endpoint-prd"  --query-endpoint-lambda-function-name ${QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME} --create-bg-deployment-endpoint-config-lambda-function-name ${CREATE_BLUE_GREEN_ENDPOING_CONFIG_LAMBDA_FUNCTION_NAME} --input-file-path "./prod_input.json"
+      - echo $CODEBUILD_RESOLVED_SOURCE_VERSION > commit.txt
+      - echo $CODEBUILD_BUILD_ID >> commit.txt # Add build ID when commit doesn't change
+
+  post_build:
+    commands:
+      - echo Package custom resources
+      - echo Done
+
+artifacts:
+  files:
+    - $SUB_PATH/*.json
+    - $SUB_PATH/*.txt
+  discard-paths: yes
