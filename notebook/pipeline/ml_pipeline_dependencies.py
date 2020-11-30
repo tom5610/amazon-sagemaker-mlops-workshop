@@ -3,8 +3,10 @@ import time
 import re
 import uuid
 import argparse
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import os, urllib.request
+import pandas as pd
+import numpy as np
 
 import stepfunctions
 from stepfunctions.inputs import ExecutionInput
@@ -47,6 +49,28 @@ def setup_trained_model(bucket_name, s3_key_trained_model):
     os.makedirs('model', exist_ok=True)
     urllib.request.urlretrieve(TRAINED_MODEL_URI, 'model/model.tar.gz')
     s3.upload_file('model/model.tar.gz', bucket_name, s3_key_trained_model)
+
+def display_state_machine_advice(workflow_name, execution_id):
+    display(HTML(f'''<br>The Step Function workflow "{workflow_name}" is now executing... 
+            <br>To view state machine in the console click 
+            <a target="_blank" href="https://{region}.console.aws.amazon.com/states/home?region={region}#/statemachines/view/arn:aws:states:ap-southeast-2:{account_id}:stateMachine:{workflow_name}">State Machine</a> 
+            <br>To view execution in the console click 
+            <a target="_blank" href="https://{region}.console.aws.amazon.com/states/home?region={region}#/executions/details/arn:aws:states:ap-southeast-2:{account_id}:execution:{workflow_name}:{execution_id}">Execution</a>.
+        '''))
+
+def display_training_job_advice(training_job_name):
+    display(HTML(f'''<br>The training job "{training_job_name}" is now running. 
+        To view it in the console click 
+        <a target="_blank" href="https://console.aws.amazon.com/sagemaker/home?region={region}#/jobs">here</a>.
+    '''))  
+    
+def display_codepipeline_advice(code_pipeline_name):
+    display(HTML(f'''<br>CodePipeline process "{code_pipeline_name}" will be kicked off shortly. 
+        To view it in the console click 
+        <a target="_blank" href="https://{region}.console.aws.amazon.com/codesuite/codepipeline/pipelines/{code_pipeline_name}/view?region={region}">here</a>.
+    '''))  
+    
+
     
 def main(bucket_name):
     setup_trained_model(bucket_name, S3_KEY_TRAINED_MODEL)
