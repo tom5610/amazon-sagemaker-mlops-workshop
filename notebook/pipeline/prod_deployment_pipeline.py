@@ -219,7 +219,9 @@ def create_workflow(
 def main(
     workflow_name,
     workflow_execution_role,
-    topic_name
+    topic_name,
+    region,
+    account_id
 ):
     # bucket_name is created in ml_pipeline_dependencies.py, which is imported at the beginning.
     workflow = create_workflow(
