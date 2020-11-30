@@ -33,7 +33,7 @@ phases:
       - echo Create or Update Workflow - State Machine in Step Functions
       - python3 ./pipeline/prod_deployment_pipeline.py --workflow-name ${WORKFLOW_NAME} --workflow-execution-role ${WORKFLOW_EXECUTION_ROLE} --topic-name ${NOTIFICATION_TOPIC_NAME} 
       - echo Create Workflow Execution Input file
-      - python3 ./pipeline/prod_deployment_pipeline_input --dev-endpoint-name "direct-marketing-endpoint-dev" --prd-endpoint-name "direct-marketing-endpoint-prd"  --query-endpoint-lambda-function-name ${QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME} --create-bg-deployment-endpoint-config-lambda-function-name ${CREATE_BLUE_GREEN_ENDPOING_CONFIG_LAMBDA_FUNCTION_NAME} --input-file-path "./prod_input.json"
+      - python3 ./pipeline/prod_deployment_pipeline_input.py --dev-endpoint-name "direct-marketing-endpoint-dev" --prd-endpoint-name "direct-marketing-endpoint-prd"  --query-endpoint-lambda-function-name ${QUERY_ENDPOINT_LAMBDA_FUNCTION_NAME} --create-bg-deployment-endpoint-config-lambda-function-name ${CREATE_BLUE_GREEN_ENDPOING_CONFIG_LAMBDA_FUNCTION_NAME} --input-file-path "./prod_input.json"
       - echo $CODEBUILD_RESOLVED_SOURCE_VERSION > commit.txt
       - echo $CODEBUILD_BUILD_ID >> commit.txt # Add build ID when commit doesn't change
 
