@@ -72,11 +72,6 @@ Parameters:
     Description: Define whether the pipeline does Hyperparameters Optimization by default.
     AllowedValues: [true, false]
 
-  NotificationEmailId:
-    Type: String
-    Default: xyz@example.com
-    Description: Define the email id to receive model training notification.
-
   ModelTrainingNotificationTopicName:
     Type: String
     Default: ml-pipeline-notification-topic
@@ -717,9 +712,6 @@ Resources:
     Type: AWS::SNS::Topic
     Properties: 
       DisplayName: Model Training Notification Topic
-      Subscription: 
-        - Endpoint: !Ref NotificationEmailId
-          Protocol: "email"
       TopicName: !Ref ModelTrainingNotificationTopicName
 
 
