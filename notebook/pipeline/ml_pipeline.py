@@ -10,11 +10,17 @@ def upload_preprocess_code(bucket_name):
     return input_code_uri
 
 def create_experiment(experiment_name):
-    experiment = Experiment.create(
-        experiment_name = experiment_name, 
-        description = "Classification of target direct marketing", 
-        sagemaker_boto_client = sm
-    )
+    try:
+        experiment = Experiment.load(
+            experiment_name = experiment_name, 
+            sagemaker_boto_client = sm
+        )
+    except:
+        experiment = Experiment.create(
+            experiment_name = experiment_name, 
+            description = "Classification of target direct marketing", 
+            sagemaker_boto_client = sm
+        )
     return experiment
 
 def create_trial(experiment_name, trial_name):
@@ -585,9 +591,8 @@ def main(
     sagemaker_execution_role
 ):
     
-    # todo use an existing experiment instead of creating a new one every time.
-    suffix = datetime.now().strftime("%y%m%d-%H%M%S")
-    experiment = create_experiment(f"xgboost-target-direct-marketing-{suffix}")
+    # May use an existing experiment instead of creating a new one every time.
+    experiment = create_experiment(workflow_name)
     # bucket_name is created in ml_pipeline_dependencies.py, which is imported at the beginning.
     workflow = create_workflow(
         bucket_name, 
