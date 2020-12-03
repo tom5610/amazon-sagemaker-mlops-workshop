@@ -20,8 +20,13 @@ def lambda_handler(event, context):
     prd_endpoint_name = get_value('PrdEndpointName', event)
     prd_model_name = get_model_on_endpoint(prd_endpoint_name)
     
+    logger.info(f"prd_model_name: {prd_model_name}; dev_model_name: {dev_model_name}")
     production_variants = get_production_variants(prd_model_name, dev_model_name)
-        
+    logger.info(f"length of production_variants: {len(production_variants)}")
+    
+    if len(production_variants) == 0:
+        raise Exception("Dev or Prod Endpoint does not exist, Blue/Green deployment aborted!")
+
 
     sm_client.create_endpoint_config(
         EndpointConfigName = endpoint_config_name,
